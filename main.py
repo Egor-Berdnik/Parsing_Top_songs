@@ -5,7 +5,16 @@ import psycopg2
 from psycopg2 import sql
 
 UWC_base = 'http://www.mediatraffic.de/tracks-week'
-UWC_list = [UWC_base + f'{week:02}-2023.htm' for week in range(1, 53)]
+
+calculation_year = input(str("Enter year of calculation: "))
+
+UWC_list = [UWC_base + f'{week:02}-{calculation_year}.htm' for week in range(1, 53)]
+
+"""
+Ввиду особенностей исходной HTML страницы некоторые названия песен записаны в нескольких тегах.
+Для этого вводится список SONGS_TO_MERGE для объединения этих названий.
+"""
+
 SONGS_TO_MERGE = ['(It Goes Like) Nanana', "I'm Good (Blue)", "Until I Found You",
                   "Celestial", "Special Kiss", "On The Street", "Take Two", "Tapestry",
                   "Nanimono"]
@@ -87,7 +96,7 @@ def save_artists_list_to_database(song_values, sales_values, uwc):
         cursor.close()
         conn.close()
 
-        print(f"Данные успешно сохранены в базу данных- {week}")
+        print(f"Данные успешно сохранены в базу данных - неделя {week} год {year}")
 
 
 for uwc_url in UWC_list:
