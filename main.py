@@ -30,7 +30,9 @@ def get_artist_songs(url):
     page = requests.get(url)
     soup = BeautifulSoup(page.content, 'html.parser')
 
-    art = [element.text.strip().replace('\n', '').replace('\t', '').replace('  ', ' ').replace('   ', ' ').replace('    ', ' ').replace('     ', '')
+    art = [element.text.strip().replace('\n', '').replace('\t', '')
+           .replace('  ', ' ').replace('   ', ' ').replace('    ', ' ')
+           .replace('     ', '')
            for element in soup.select('b')
            if len(element.text) > 7
            and any(char.isalpha() for char in element.text)]
@@ -122,13 +124,16 @@ def get_all_sales_tables():
 def merge_sales_tables(year):
     conn = psycopg2.connect(**DB_CONNECTION)
     cursor = conn.cursor()
-    cursor.execute("SELECT EXISTS(SELECT * FROM information_schema.tables WHERE table_name=%s)", ("sales_history",))
+    cursor.execute("SELECT EXISTS(SELECT * FROM information_schema.tables "
+                   "WHERE table_name=%s)", ("sales_history",))
     exists = cursor.fetchone()[0]
     if exists:
         cursor.execute(sql.SQL("DROP TABLE {}").format(sql.Identifier("sales_history")))
 
-    union_query = sql.SQL(" UNION ALL ").join([sql.SQL("SELECT song, sales_sum FROM {}").format(sql.Identifier(table_name))
-                                               for table_name in get_all_sales_tables() if "sales_week_combined" in table_name])
+    union_query = sql.SQL(" UNION ALL ").join([sql.SQL("SELECT song, "
+                                                       "sales_sum FROM {}").format(sql.Identifier(table_name))
+                                               for table_name in get_all_sales_tables()
+                                               if "sales_week_combined" in table_name])
     table_query = sql.SQL("CREATE TABLE {} AS SELECT song, SUM(sales_sum) AS total_sales FROM ({}) "
                           "AS combined GROUP BY song").format(
         sql.Identifier("sales_history"), union_query
