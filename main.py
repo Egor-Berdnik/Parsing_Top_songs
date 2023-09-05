@@ -15,9 +15,13 @@ UWC_list = [UWC_base + f'{week:02}-{calculation_year}.htm' for week in range(1, 
 Для этого вводится список SONGS_TO_MERGE для объединения этих названий.
 """
 
-SONGS_TO_MERGE = ['(It Goes Like) Nanana', "I'm Good (Blue)", "Until I Found You",
-                  "Celestial", "Special Kiss", "On The Street", "Take Two", "Tapestry",
-                  "Nanimono"]
+SONGS_TO_MERGE = ['(It Goes Like) Nanana', "I'm Good (Blue)", "Until I Found You", "Celestial", "Special Kiss",
+                  "On The Street", "Take Two", "Tapestry", "Nanimono", "Prisoner", "Xo Tour Llif3 -", "Let Me Love You",
+                  "Bad Things", "Love Me Now", "Influencer", "I Took A Pill In Ibiza", "Work From Home", "Stitches",
+                  "Fast Car", "Just Like Fire", "Perfect Strangers", "Hands To Myself", "Jones", "Same Old Love",
+                  "Cheerleader", "Lean On - Major Lazer feat. M", "Locked Away", "Trap Queen", "Drag Me Down",
+                  "Good For You", "Heartbeat Song", "Renegades", "Steal My Girl", "Taiyô Knock", "Night Changes",
+                  "Giant - Calvin Harris", "La Jeepeta"]
 DB_CONNECTION = {"host": "localhost", "database": "song_sales", "user": "postgres",
                  "password": "8848"}
 
@@ -26,7 +30,7 @@ def get_artist_songs(url):
     page = requests.get(url)
     soup = BeautifulSoup(page.content, 'html.parser')
 
-    art = [element.text.strip().replace('\n', '').replace('\t', '')
+    art = [element.text.strip().replace('\n', '').replace('\t', '').replace('  ', ' ').replace('   ', ' ').replace('    ', ' ').replace('     ', '')
            for element in soup.select('b')
            if len(element.text) > 7
            and any(char.isalpha() for char in element.text)]
@@ -60,7 +64,11 @@ def get_sales(url):
 
 
 def create_table(cursor, table_name):
-    table_query = sql.SQL("CREATE TABLE IF NOT EXISTS {} (song TEXT, sales INTEGER)").format(
+    cursor.execute("SELECT EXISTS(SELECT * FROM information_schema.tables WHERE table_name=%s)", (table_name,))
+    exists = cursor.fetchone()[0]
+    if exists:
+        cursor.execute(sql.SQL("DROP TABLE {}").format(sql.Identifier(table_name)))
+    table_query = sql.SQL("CREATE TABLE {} (song TEXT, sales INTEGER)").format(
         sql.Identifier(table_name)
     )
     cursor.execute(table_query)
@@ -99,7 +107,44 @@ def save_artists_list_to_database(song_values, sales_values, uwc):
         print(f"Данные успешно сохранены в базу данных - неделя {week} год {year}")
 
 
+def get_all_sales_tables():
+    conn = psycopg2.connect(**DB_CONNECTION)
+    cursor = conn.cursor()
+    cursor.execute("SELECT table_name FROM information_schema.tables "
+                   "WHERE table_schema='public' AND table_type='BASE TABLE' "
+                   "AND table_name LIKE '%sales_week_combined%'")
+    tables = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return tables
+
+
+def merge_sales_tables(year):
+    conn = psycopg2.connect(**DB_CONNECTION)
+    cursor = conn.cursor()
+    cursor.execute("SELECT EXISTS(SELECT * FROM information_schema.tables WHERE table_name=%s)", ("sales_history",))
+    exists = cursor.fetchone()[0]
+    if exists:
+        cursor.execute(sql.SQL("DROP TABLE {}").format(sql.Identifier("sales_history")))
+
+    union_query = sql.SQL(" UNION ALL ").join([sql.SQL("SELECT song, sales_sum FROM {}").format(sql.Identifier(table_name))
+                                               for table_name in get_all_sales_tables() if "sales_week_combined" in table_name])
+    table_query = sql.SQL("CREATE TABLE {} AS SELECT song, SUM(sales_sum) AS total_sales FROM ({}) "
+                          "AS combined GROUP BY song").format(
+        sql.Identifier("sales_history"), union_query
+    )
+    cursor.execute(table_query)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    print(f"Таблица sales_history успешно обновлена")
+
+
 for uwc_url in UWC_list:
     artist = get_artist_songs(uwc_url)
     sales = get_sales(uwc_url)
     save_artists_list_to_database(artist, sales, uwc_url)
+
+merge_sales_tables(calculation_year)
