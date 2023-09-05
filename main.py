@@ -103,3 +103,5 @@ for uwc_url in UWC_list:
     artist = get_artist_songs(uwc_url)
     sales = get_sales(uwc_url)
     save_artists_list_to_database(artist, sales, uwc_url)
+
+test
